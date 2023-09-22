@@ -1,0 +1,106 @@
+import AppKit
+import Combine
+import Defaults
+import KeyboardShortcuts
+
+class AppDelegate: NSObject {
+  private var cancellables = [AnyCancellable]()
+  
+  let fromClipboardKey = "KeyboardShortcuts_\(KeyboardShortcuts.Name.fromClipboard.rawValue)"
+  
+  lazy var statusItem = {
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    if let button = item.button {
+      button.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: nil)
+    }
+    return item
+  }()
+  
+  lazy var menu = {
+    let menu = NSMenu()
+        
+    menu.addItem(withTitle: "Item 1", action: #selector(menuItemSelected), keyEquivalent: "")
+    menu.addItem(withTitle: "Item 2", action: #selector(menuItemSelected), keyEquivalent: "")
+    
+    return menu
+  }()
+  
+  func autoStart() {
+    guard !StayPut.isRunning(.App), Defaults[.autoStart] else { return }
+    StayPut.open(.main)
+  }
+  
+  func statusMenu() {
+    statusItem.menu = menu
+    Defaults.publisher(Defaults.Keys.statusMenu)
+      .sink {[weak self] v in
+        guard let self = self else { return }
+        statusItem.isVisible = v.newValue
+      }
+      .store(in: &cancellables)
+  }
+  
+  func quickPaste() {
+    UserDefaults.current.addObserver(
+      self,
+      forKeyPath: fromClipboardKey,
+      options: [.initial, .new],
+      context: nil
+    )
+    
+    KeyboardShortcuts.onKeyUp(for: .fromClipboard) {
+      print("KeyboardShortcuts fromClipboard onKeyUp.")
+      guard let items = NSPasteboard.general.pasteboardItems, !items.isEmpty else { return }
+
+      StayPut.open(.nonew)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        do {
+          let window = try StayPut.open(items)
+          StayPut.open(window)
+        } catch {
+          print(error)
+        }
+      }
+    }
+    
+    Defaults.publisher(Defaults.Keys.quickPaste)
+      .sink { v in
+        if v.newValue {
+          KeyboardShortcuts.enable(.fromClipboard)
+          print("Enable fromClipboard KeyboardShortcuts.")
+        } else {
+          KeyboardShortcuts.disable(.fromClipboard)
+          print("Disable fromClipboard KeyboardShortcuts.")
+        }
+      }
+      .store(in: &cancellables)
+  }
+  
+  @objc
+  func menuItemSelected() {
+    
+  }
+
+  override func observeValue(
+    forKeyPath keyPath: String?,
+    of object: Any?,
+    change: [NSKeyValueChangeKey : Any]?,
+    context: UnsafeMutableRawPointer?
+  ) {
+    guard keyPath == fromClipboardKey else { return }
+    KeyboardShortcuts.disable(.fromClipboard)
+    let data = UserDefaults.current.value(forKey: fromClipboardKey)
+    UserDefaults.standard.setValue(data, forKey: fromClipboardKey)
+    guard Defaults[.quickPaste] else { return }
+    KeyboardShortcuts.enable(.fromClipboard)
+  }
+}
+
+extension AppDelegate: NSApplicationDelegate {
+  
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    autoStart()
+    statusMenu()
+    quickPaste()
+  }
+}

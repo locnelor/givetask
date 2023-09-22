@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { TaskModule } from './task/task.module';
 import { WorkModule } from './work/work.module';
 import { UserModule } from './user/user.module';
+import { SystemModule } from './system/system.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { UserModule } from './user/user.module';
     }),
     TaskModule,
     WorkModule,
-    UserModule
+    UserModule,
+    SystemModule
   ],
   controllers: [AppController],
   providers: [AppService],
